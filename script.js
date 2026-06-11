@@ -14,10 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }, observerOptions);
 
-    // Observe app cards
-    const appCards = document.querySelectorAll('.app-card');
-    appCards.forEach(card => {
-        observer.observe(card);
+    // Observe reveal elements
+    const revealElements = document.querySelectorAll('.reveal');
+    revealElements.forEach(el => {
+        observer.observe(el);
     });
 
     // Custom Cursor
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Cursor hover effects on interactable elements
-    const interactables = document.querySelectorAll('a, input, button, .btn-play');
+    const interactables = document.querySelectorAll('a, input, button, .btn-play, .filter-btn, .theme-toggle, .close-modal');
     interactables.forEach(el => {
         el.addEventListener('mouseenter', () => {
             cursor.classList.add('active');
@@ -94,29 +94,138 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Search / Filter Functionality
-    const searchInput = document.getElementById('app-search');
+    // Theme Toggle Functionality
+    const themeToggle = document.getElementById('theme-toggle');
+    const sunIcon = document.querySelector('.sun-icon');
+    const moonIcon = document.querySelector('.moon-icon');
+
+    // Check local storage
+    if (localStorage.getItem('theme') === 'light') {
+        document.body.classList.add('light-mode');
+        sunIcon.style.display = 'block';
+        moonIcon.style.display = 'none';
+    }
+
+    themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+        const isLight = document.body.classList.contains('light-mode');
+        
+        if (isLight) {
+            localStorage.setItem('theme', 'light');
+            sunIcon.style.display = 'block';
+            moonIcon.style.display = 'none';
+        } else {
+            localStorage.setItem('theme', 'dark');
+            sunIcon.style.display = 'none';
+            moonIcon.style.display = 'block';
+        }
+    });
+
+    // Category Filtering
+    const filterBtns = document.querySelectorAll('.filter-btn');
     const appCardsArray = Array.from(document.querySelectorAll('.app-card'));
 
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove active class from all
+            filterBtns.forEach(b => b.classList.remove('active'));
+            // Add active class to clicked
+            btn.classList.add('active');
+
+            const filterValue = btn.getAttribute('data-filter');
+
             appCardsArray.forEach(card => {
-                const appName = card.querySelector('.app-name').innerText.toLowerCase();
-                const tags = Array.from(card.querySelectorAll('.tag')).map(t => t.innerText.toLowerCase());
+                const categories = card.getAttribute('data-category').split(' ');
                 
-                const matches = appName.includes(searchTerm) || tags.some(tag => tag.includes(searchTerm));
-                
-                if (matches) {
+                if (filterValue === 'all' || categories.includes(filterValue)) {
                     card.style.display = 'block';
-                    setTimeout(() => card.style.opacity = '1', 10); // slight delay to allow display block to apply before transition
+                    setTimeout(() => card.style.opacity = '1', 10);
                 } else {
                     card.style.opacity = '0';
-                    setTimeout(() => card.style.display = 'none', 300); // Wait for fade out to complete
+                    setTimeout(() => card.style.display = 'none', 300);
                 }
             });
         });
+    });
+
+    // Particle Canvas Background
+    const canvas = document.getElementById('particle-canvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        let particles = [];
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initParticles();
+        });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 1;
+                this.vy = (Math.random() - 0.5) * 1;
+                this.size = Math.random() * 2 + 1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > width) this.vx = -this.vx;
+                if (this.y < 0 || this.y > height) this.vy = -this.vy;
+
+                // Mouse interaction
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < 150) {
+                    this.x -= dx * 0.02;
+                    this.y -= dy * 0.02;
+                }
+            }
+            draw() {
+                ctx.fillStyle = document.body.classList.contains('light-mode') ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const numParticles = Math.floor((width * height) / 15000);
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, width, height);
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                // Connect nearby particles
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = dx * dx + dy * dy;
+                    if (dist < 10000) {
+                        ctx.strokeStyle = document.body.classList.contains('light-mode') ? `rgba(0, 0, 0, ${0.1 - dist/100000})` : `rgba(255, 255, 255, ${0.1 - dist/100000})`;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateParticles);
+        }
+
+        initParticles();
+        animateParticles();
     }
 
     // 3D Tilt Effect for App Cards
@@ -154,4 +263,71 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 500);
         });
     });
+
+    // App Data for Modals
+    const appData = {
+        'drifty': {
+            title: 'Drifty',
+            icon: './assets/drifty_app_icon.png',
+            desc: 'Get ready for the ultimate high-octane racing experience. Drifty puts you in the driver seat of customized supercars as you master the art of drifting around tight corners and competing against the best in the world. Experience next-gen 3D graphics and realistic physics.',
+            stats: 'Downloads: 50k+ | Rating: 4.8 ★',
+            url: 'https://spramani.github.io/Drifty_url/',
+            images: ['./assets/drifty_app_icon.png'] // Using icon as placeholder for screenshots
+        },
+        'aquasort': {
+            title: 'AquaSort',
+            icon: './assets/aquasort_app_icon.png',
+            desc: 'A relaxing, brain-teasing puzzle game where you sort colored water into matching tubes. Sounds simple? As you progress, the puzzles get increasingly challenging, requiring strategic thinking and planning. Relax your mind with satisfying ASMR sound effects and beautiful fluid animations.',
+            stats: 'Downloads: 100k+ | Rating: 4.9 ★',
+            url: 'https://spramani.github.io/AquaSort_Urls/',
+            images: ['./assets/aquasort_app_icon.png']
+        }
+    };
+
+    const modal = document.getElementById('app-modal');
+    const modalBody = document.getElementById('modal-body');
+    const closeModal = document.querySelector('.close-modal');
+
+    // Expose openModal to global scope
+    window.openModal = function(appId) {
+        const data = appData[appId];
+        if (!data) return;
+
+        modalBody.innerHTML = `
+            <div class="modal-header">
+                <img src="${data.icon}" alt="${data.title}" class="modal-icon">
+                <div>
+                    <h2 class="modal-title">${data.title}</h2>
+                    <div class="modal-stats">${data.stats}</div>
+                </div>
+            </div>
+            <div class="modal-gallery">
+                ${data.images.map(img => `<img src="${img}" alt="Screenshot">`).join('')}
+            </div>
+            <p class="modal-desc">${data.desc}</p>
+            <div style="text-align: center;">
+                <a href="${data.url}" target="_blank" class="modal-action">Launch App</a>
+            </div>
+        `;
+
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    };
+
+    if (closeModal) {
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+    }
+
+    // Close modal on outside click
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    }
 });
